@@ -7,7 +7,7 @@ const LAST_USED_KEY = 'llm-council-last-selection';
 const LAST_CHAIRMAN_KEY = 'llm-council-last-chairman';
 
 // Default max models (can be overridden by backend config)
-const DEFAULT_MAX_MODELS = 10;
+const DEFAULT_MAX_MODELS = 5;
 
 // Built-in presets (will be merged with dynamic "Last Used")
 const BUILT_IN_PRESETS = {

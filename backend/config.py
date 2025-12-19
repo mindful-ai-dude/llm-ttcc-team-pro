@@ -40,8 +40,8 @@ else:
             "x-ai/grok-4",
         ]
 
-# Maximum council models (default 10, can be overridden via .env)
-MAX_COUNCIL_MODELS = int(os.getenv("MAX_COUNCIL_MODELS", "10"))
+# Maximum council models (default 5, can be overridden via .env)
+MAX_COUNCIL_MODELS = int(os.getenv("MAX_COUNCIL_MODELS", "5"))
 
 # Chairman model - synthesizes final response
 CHAIRMAN_MODEL = os.getenv("CHAIRMAN_MODEL")
@@ -157,7 +157,7 @@ def reload_config():
                 "x-ai/grok-4",
             ]
 
-    MAX_COUNCIL_MODELS = int(os.getenv("MAX_COUNCIL_MODELS", "10"))
+    MAX_COUNCIL_MODELS = int(os.getenv("MAX_COUNCIL_MODELS", "5"))
 
     # Chairman model
     CHAIRMAN_MODEL = os.getenv("CHAIRMAN_MODEL")
