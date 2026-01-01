@@ -77,6 +77,7 @@ export default function ChatInterface({
   const [driveUploaded, setDriveUploaded] = useState({});
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   // Check Google Drive status on mount
   useEffect(() => {
@@ -112,6 +113,19 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [conversation]);
+
+  // Auto-resize textarea based on content
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 300)}px`;
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -413,6 +427,7 @@ export default function ChatInterface({
             </button>
 
             <textarea
+              ref={textareaRef}
               className="message-input"
               placeholder={conversation.messages.length === 0
                 ? "Ask your question... (Shift+Enter for new line, Enter to send)"
@@ -422,7 +437,7 @@ export default function ChatInterface({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isLoading || isUploading}
-              rows={3}
+              rows={1}
             />
             {webSearchAvailable && (
               <label className="web-search-toggle" title="When enabled, queries will include web search for latest news">
