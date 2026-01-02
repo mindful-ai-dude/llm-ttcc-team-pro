@@ -175,6 +175,7 @@ async def query_models_with_stage_timeout(
     # Create ALL tasks at once
     tasks = {asyncio.create_task(query_with_name(model)): model for model in models}
     pending = set(tasks.keys())
+    extended_wait_used = False  # Track if we've already done the extended wait
 
     while pending:
         elapsed = time.time() - start_time
@@ -187,10 +188,19 @@ async def query_models_with_stage_timeout(
                 for task in pending:
                     task.cancel()
                 break
-            else:
+            elif not extended_wait_used:
+                # Not enough results, wait a bit more (up to 30s extra) - but only once
+                extended_wait_used = True
                 remaining_timeout = min(30.0, stage_timeout * 0.5)
                 logger.warning("[%s] Only %d results, waiting %.1fs more",
                              stage, len(results), remaining_timeout)
+            else:
+                # Extended wait already used, give up and return what we have
+                logger.warning("[%s] Extended wait exhausted after %.1fs with only %d/%d results, proceeding anyway",
+                             stage, elapsed, len(results), len(models))
+                for task in pending:
+                    task.cancel()
+                break
 
         try:
             done, pending = await asyncio.wait(
