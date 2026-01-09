@@ -99,6 +99,7 @@ from .config import (
 )
 from .tools import get_available_tools
 from .memory import CouncilMemorySystem
+from . import runtime_settings
 
 # Import router module based on configuration
 if ROUTER_TYPE == "ollama":
@@ -167,7 +168,17 @@ def build_multimodal_messages(
         List of message dicts ready for OpenRouter API
     """
     # Build the text prompt with context
-    text_prompt = build_context_prompt(conversation_history or [], user_query)
+    full_query = build_context_prompt(conversation_history or [], user_query)
+
+    # Apply runtime Stage 1 prompt template (defaults to "{full_query}" which preserves
+    # current behavior if user hasn't customized it).
+    settings = runtime_settings.get_runtime_settings()
+    template = settings.stage1_prompt_template or "{full_query}"
+    try:
+        text_prompt = template.format(user_query=user_query, full_query=full_query)
+    except Exception as e:
+        logger.warning("[STAGE1] Failed formatting stage1_prompt_template: %s", e)
+        text_prompt = full_query
 
     # Build message content (text only or multimodal)
     content = build_message_content(text_prompt, images)
@@ -528,6 +539,7 @@ async def stage1_collect_responses(
     """
     # Build messages with optional image support
     messages = build_multimodal_messages(user_query, images, conversation_history)
+    settings = runtime_settings.get_runtime_settings()
 
     # Add tool context if the query suggests tool usage (Feature 4)
     tool_outputs: List[Dict[str, str]] = []
@@ -564,7 +576,12 @@ Search Results:
     logger.debug("[STAGE1] Messages: %d (system=%d)", len(messages), sum(1 for m in messages if m.get('role')=='system'))
 
     # Query all models in parallel
-    responses = await query_models_parallel(council_models, messages, stage="STAGE1")
+    responses = await query_models_parallel(
+        council_models,
+        messages,
+        stage="STAGE1",
+        temperature=settings.council_temperature,
+    )
 
     # Format results - include both successes and errors
     stage1_results = []
@@ -622,6 +639,7 @@ async def stage1_collect_responses_streaming(
     """
     # Build messages with optional image support
     messages = build_multimodal_messages(user_query, images, conversation_history)
+    settings = runtime_settings.get_runtime_settings()
 
     # Add tool context
     tool_outputs: List[Dict[str, str]] = []
@@ -669,7 +687,11 @@ Search Results:
         yield {"type": "tool_outputs", "tool_outputs": tool_outputs}
 
     # Query all models in parallel and yield results as they complete
-    async for model, response in query_models_streaming(council_models, messages):
+    async for model, response in query_models_streaming(
+        council_models,
+        messages,
+        temperature=settings.council_temperature,
+    ):
         if response is None:
             # Shouldn't happen with new error handling, but safety fallback
             yield {
@@ -749,36 +771,15 @@ async def stage2_collect_rankings(
 
 {responses_toon}"""
 
-    ranking_prompt = f"""You are evaluating different responses to the following question:
-
-Question: {user_query}
-
-Here are the responses from different models (anonymized):
-
-{responses_text}
-
-Your task:
-1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
-2. Then, at the very end of your response, provide a final ranking.
-
-IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
-- Start with the line "FINAL RANKING:" (all caps, with colon)
-- Then list the responses from best to worst as a numbered list
-- Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
-- Do not add any other text or explanations in the ranking section
-
-Example of the correct format for your ENTIRE response:
-
-Response A provides good detail on X but misses Y...
-Response B is accurate but lacks depth on Z...
-Response C offers the most comprehensive answer...
-
-FINAL RANKING:
-1. Response C
-2. Response A
-3. Response B
-
-Now provide your evaluation and ranking:"""
+    settings = runtime_settings.get_runtime_settings()
+    try:
+        ranking_prompt = settings.stage2_prompt_template.format(
+            user_query=user_query,
+            responses_text=responses_text,
+        )
+    except Exception as e:
+        logger.warning("[STAGE2] Failed formatting stage2_prompt_template: %s", e)
+        ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nProvide your evaluation and ranking."
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
@@ -810,7 +811,8 @@ Now provide your evaluation and ranking:"""
         messages,
         stage="STAGE2",
         stage_timeout=90.0,  # 90 seconds max for Stage 2
-        min_results=min(3, len(council_models))  # Need at least 3 or all if less
+        min_results=min(3, len(council_models)),  # Need at least 3 or all if less
+        temperature=settings.stage2_temperature,
     )
 
     # Format results - include both successes and errors
@@ -929,41 +931,26 @@ async def stage3_synthesize_final(
             f"- {t.get('tool')}: {t.get('result')}" for t in tool_outputs
         )
 
-    # Build prompt based on whether rankings are available
+    settings = runtime_settings.get_runtime_settings()
     if has_rankings:
-        chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
-
-Original Question: {user_query}
-
-STAGE 1 - Individual Responses:
-{stage1_text}
-
-STAGE 2 - Peer Rankings:
-{stage2_text}{tools_text}
-
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
-- The individual responses and their insights
-- The peer rankings and what they reveal about response quality
-- Any patterns of agreement or disagreement
-
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+        rankings_block = f"STAGE 2 - Peer Rankings:\n{stage2_text}"
     else:
-        # Fallback prompt when no rankings available
-        chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question.
+        rankings_block = (
+            "Note: Peer rankings were not available due to rate limiting or other issues.\n\n"
+            "STAGE 2 - Peer Rankings:\n"
+        )
 
-Note: Peer rankings were not available due to rate limiting or other issues.
-
-Original Question: {user_query}
-
-STAGE 1 - Individual Responses:
-{stage1_text}{tools_text}
-
-Your task as Chairman is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
-- The individual responses and their insights
-- Any patterns of agreement or disagreement between models
-- The completeness and accuracy of each response
-
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+    try:
+        chairman_prompt = settings.stage3_prompt_template.format(
+            user_query=user_query,
+            stage1_text=stage1_text,
+            stage2_text=stage2_text,
+            rankings_block=rankings_block,
+            tools_text=tools_text,
+        )
+    except Exception as e:
+        logger.warning("[STAGE3] Failed formatting stage3_prompt_template: %s", e)
+        chairman_prompt = f"Original Question: {user_query}\n\n{stage1_text}\n\n{rankings_block}{tools_text}"
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
@@ -974,7 +961,12 @@ Provide a clear, well-reasoned final answer that represents the council's collec
         logger.debug("[STAGE3] Tool outputs: %d", len(tool_outputs))
 
     # Query the chairman model
-    response = await query_model(chairman_model, messages, stage="STAGE3")
+    response = await query_model(
+        chairman_model,
+        messages,
+        stage="STAGE3",
+        temperature=settings.chairman_temperature,
+    )
 
     # Check if response failed (None or error response)
     response_failed = response is None or response.get('error')
@@ -993,7 +985,12 @@ Provide a clear, well-reasoned final answer that represents the council's collec
         for fallback_model in fallback_models:
             logger.info("Attempting to use %s as fallback chairman (%d models remaining)...",
                        fallback_model, len(fallback_models) - fallback_models.index(fallback_model) - 1)
-            fallback_response = await query_model(fallback_model, messages, stage="STAGE3_FALLBACK")
+            fallback_response = await query_model(
+                fallback_model,
+                messages,
+                stage="STAGE3_FALLBACK",
+                temperature=settings.chairman_temperature,
+            )
 
             # Check if fallback succeeded (not None and not error)
             if fallback_response and not fallback_response.get('error') and fallback_response.get('content'):

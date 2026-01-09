@@ -11,6 +11,7 @@ export default function Sidebar({
   currentConversationId,
   onSelectConversation,
   onNewConversation,
+  onOpenSettings,
   onDeleteConversation,
   onDeleteAllConversations,
   onUpdateTitle,
@@ -172,6 +173,15 @@ export default function Sidebar({
         <button className="new-conversation-btn" onClick={onNewConversation}>
           + New Conversation
         </button>
+        {onOpenSettings && (
+          <button
+            className="settings-btn"
+            onClick={onOpenSettings}
+            title="Edit prompts and temperatures"
+          >
+            Settings
+          </button>
+        )}
         {conversations.length > 0 && (
           <button
             className="delete-all-btn"
@@ -330,6 +340,17 @@ export default function Sidebar({
     </div>
   );
 }
+
+Sidebar.propTypes = {
+  conversations: PropTypes.array.isRequired,
+  currentConversationId: PropTypes.string,
+  onSelectConversation: PropTypes.func.isRequired,
+  onNewConversation: PropTypes.func.isRequired,
+  onOpenSettings: PropTypes.func,
+  onDeleteConversation: PropTypes.func.isRequired,
+  onDeleteAllConversations: PropTypes.func.isRequired,
+  onUpdateTitle: PropTypes.func,
+};
 
 Sidebar.propTypes = {
   conversations: PropTypes.arrayOf(

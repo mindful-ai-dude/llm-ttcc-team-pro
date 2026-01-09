@@ -149,6 +149,9 @@ export const api = {
     if (options.chairman) {
       body.chairman = options.chairman;
     }
+    if (options.executionMode) {
+      body.execution_mode = options.executionMode;
+    }
     if (options.username) {
       body.username = options.username;
     }
@@ -162,6 +165,88 @@ export const api = {
     });
     if (!response.ok) {
       throw new Error('Failed to create conversation');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get runtime settings (prompts + temperatures). Requires authentication.
+   */
+  async getRuntimeSettings() {
+    const response = await authFetch(`${API_BASE}/api/settings`);
+    if (!response.ok) {
+      throw new Error('Failed to get runtime settings');
+    }
+    return response.json();
+  },
+
+  /**
+   * Patch runtime settings (prompts + temperatures). Requires authentication.
+   * @param {Object} patch - Partial settings payload
+   */
+  async updateRuntimeSettings(patch) {
+    const response = await authFetch(`${API_BASE}/api/settings`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patch || {}),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to update runtime settings');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get default runtime settings. Requires authentication.
+   */
+  async getRuntimeSettingsDefaults() {
+    const response = await authFetch(`${API_BASE}/api/settings/defaults`);
+    if (!response.ok) {
+      throw new Error('Failed to get runtime settings defaults');
+    }
+    return response.json();
+  },
+
+  /**
+   * Reset runtime settings to defaults. Requires authentication.
+   */
+  async resetRuntimeSettings() {
+    const response = await authFetch(`${API_BASE}/api/settings/reset`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to reset runtime settings');
+    }
+    return response.json();
+  },
+
+  /**
+   * Export runtime settings. Requires authentication.
+   */
+  async exportRuntimeSettings() {
+    const response = await authFetch(`${API_BASE}/api/settings/export`);
+    if (!response.ok) {
+      throw new Error('Failed to export runtime settings');
+    }
+    return response.json();
+  },
+
+  /**
+   * Import runtime settings. Requires authentication.
+   * @param {Object} config - Full RuntimeSettings object
+   */
+  async importRuntimeSettings(config) {
+    const response = await authFetch(`${API_BASE}/api/settings/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config || {}),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to import runtime settings');
     }
     return response.json();
   },
@@ -317,7 +402,7 @@ export const api = {
       try {
         const event = JSON.parse(data);
         onEvent(event.type, event);
-      } catch (e) {
+      } catch {
         // Ignore incomplete final chunk
       }
     }

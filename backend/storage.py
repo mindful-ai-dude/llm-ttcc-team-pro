@@ -135,7 +135,8 @@ def _json_create_conversation(
     conversation_id: str,
     models: Optional[List[str]] = None,
     chairman: Optional[str] = None,
-    username: Optional[str] = None
+    username: Optional[str] = None,
+    execution_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create conversation in JSON file with exclusive lock."""
     ensure_data_dir()
@@ -147,7 +148,8 @@ def _json_create_conversation(
         "messages": [],
         "models": models,
         "chairman": chairman,
-        "username": username
+        "username": username,
+        "execution_mode": execution_mode,
     }
 
     path = get_conversation_path(conversation_id)
@@ -234,16 +236,21 @@ def _db_create_conversation(
     conversation_id: str,
     models: Optional[List[str]] = None,
     chairman: Optional[str] = None,
-    username: Optional[str] = None
+    username: Optional[str] = None,
+    execution_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create conversation in database."""
+    models_payload: Any = models
+    if execution_mode is not None:
+        models_payload = {"models": models, "execution_mode": execution_mode}
+
     db = SessionLocal()
     try:
         conversation = ConversationModel(
             id=conversation_id,
             title="New Conversation",
             messages=[],
-            models=models,
+            models=models_payload,
             chairman=chairman,
             username=username
         )
@@ -282,7 +289,13 @@ def _db_save_conversation(conversation: Dict[str, Any]):
         if db_conversation:
             db_conversation.title = conversation.get('title', 'New Conversation')
             db_conversation.messages = conversation.get('messages', [])
-            db_conversation.models = conversation.get('models')
+            models_value: Any = conversation.get('models')
+            if conversation.get("execution_mode") is not None:
+                models_value = {
+                    "models": models_value,
+                    "execution_mode": conversation.get("execution_mode"),
+                }
+            db_conversation.models = models_value
             db_conversation.chairman = conversation.get('chairman')
             db_conversation.username = conversation.get('username')
             db.commit()
@@ -346,7 +359,8 @@ def create_conversation(
     conversation_id: str,
     models: Optional[List[str]] = None,
     chairman: Optional[str] = None,
-    username: Optional[str] = None
+    username: Optional[str] = None,
+    execution_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new conversation.
@@ -361,8 +375,11 @@ def create_conversation(
         New conversation dict
     """
     if is_using_database():
-        return _db_create_conversation(conversation_id, models, chairman, username)
-    return _json_create_conversation(conversation_id, models, chairman, username)
+        conv = _db_create_conversation(conversation_id, models, chairman, username, execution_mode)
+    else:
+        conv = _json_create_conversation(conversation_id, models, chairman, username, execution_mode)
+
+    return _normalize_conversation(conv)
 
 
 def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
@@ -376,8 +393,11 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
         Conversation dict or None if not found
     """
     if is_using_database():
-        return _db_get_conversation(conversation_id)
-    return _json_get_conversation(conversation_id)
+        conv = _db_get_conversation(conversation_id)
+    else:
+        conv = _json_get_conversation(conversation_id)
+
+    return _normalize_conversation(conv) if conv else None
 
 
 def save_conversation(conversation: Dict[str, Any]):
@@ -388,9 +408,31 @@ def save_conversation(conversation: Dict[str, Any]):
         conversation: Conversation dict to save
     """
     if is_using_database():
-        _db_save_conversation(conversation)
+        _db_save_conversation(_normalize_conversation(conversation))
     else:
         _json_save_conversation(conversation)
+
+
+def _normalize_conversation(conversation: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Normalize conversation shape for backwards compatibility.
+
+    Supports:
+    - Legacy DB format where `models` is a list
+    - New DB format where `models` is a dict: {"models": [...], "execution_mode": "..."}
+    - JSON format with top-level `execution_mode`
+    """
+    if not conversation:
+        return conversation
+
+    models = conversation.get("models")
+    if isinstance(models, dict):
+        # Extract embedded settings without changing DB schema.
+        conversation = conversation.copy()
+        conversation["execution_mode"] = conversation.get("execution_mode") or models.get("execution_mode")
+        conversation["models"] = models.get("models")
+
+    return conversation
 
 
 def list_conversations() -> List[Dict[str, Any]]:
@@ -428,18 +470,20 @@ def add_user_message(conversation_id: str, content: str):
 def add_assistant_message(
     conversation_id: str,
     stage1: List[Dict[str, Any]],
-    stage2: List[Dict[str, Any]],
-    stage3: Dict[str, Any],
+    stage2: Optional[List[Dict[str, Any]]] = None,
+    stage3: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None
 ):
     """
-    Add an assistant message with all 3 stages to a conversation.
+    Add an assistant message to a conversation.
+
+    Supports partial execution modes where Stage 2 and/or Stage 3 may be omitted.
 
     Args:
         conversation_id: Conversation identifier
         stage1: List of individual model responses
-        stage2: List of model rankings
-        stage3: Final synthesized response
+        stage2: List of model rankings (optional)
+        stage3: Final synthesized response (optional)
         metadata: Optional metadata including label_to_model and aggregate_rankings
     """
     conversation = get_conversation(conversation_id)
@@ -449,9 +493,12 @@ def add_assistant_message(
     message = {
         "role": "assistant",
         "stage1": stage1,
-        "stage2": stage2,
-        "stage3": stage3
     }
+
+    if stage2 is not None:
+        message["stage2"] = stage2
+    if stage3 is not None:
+        message["stage3"] = stage3
 
     if metadata:
         message["metadata"] = metadata

@@ -18,9 +18,21 @@ try:
 except ImportError:  # pragma: no cover
     from langchain.tools import Tool  # type: ignore
 
-from langchain_community.tools import DuckDuckGoSearchRun, WikipediaQueryRun, ArxivQueryRun
-from langchain_community.utilities import WikipediaAPIWrapper
-import yfinance as yf
+# Optional: langchain_community (tools)
+try:  # pragma: no cover
+    from langchain_community.tools import DuckDuckGoSearchRun, WikipediaQueryRun, ArxivQueryRun
+    from langchain_community.utilities import WikipediaAPIWrapper
+except ImportError:  # pragma: no cover
+    DuckDuckGoSearchRun = None
+    WikipediaQueryRun = None
+    ArxivQueryRun = None
+    WikipediaAPIWrapper = None
+
+# Optional: yfinance (used by stock tool)
+try:  # pragma: no cover
+    import yfinance as yf
+except ImportError:  # pragma: no cover
+    yf = None
 
 # Note: PythonREPLTool removed for security - using safe AST-based calculator instead
 
@@ -163,6 +175,9 @@ def calculator_tool() -> Tool:
 
 def wikipedia_tool() -> Tool:
     """Wikipedia lookup (free)."""
+    if WikipediaQueryRun is None or WikipediaAPIWrapper is None:  # pragma: no cover
+        logger.warning("Wikipedia tool unavailable: missing langchain_community")
+        return None
     wikipedia = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
     return Tool(
         name="wikipedia",
@@ -173,6 +188,9 @@ def wikipedia_tool() -> Tool:
 
 def arxiv_tool() -> Tool:
     """ArXiv search (free)."""
+    if ArxivQueryRun is None:  # pragma: no cover
+        logger.warning("ArXiv tool unavailable: missing langchain_community")
+        return None
     arxiv = ArxivQueryRun()
     return Tool(
         name="arxiv",
@@ -183,19 +201,23 @@ def arxiv_tool() -> Tool:
 
 def duckduckgo_tool() -> Tool:
     """DuckDuckGo web search (free)."""
-    try:
-        search = DuckDuckGoSearchRun()
-        return Tool(
-            name="web_search",
-            func=search.run,
-            description="General web search for news/current info (e.g., 'latest AI news').",
-        )
-    except ImportError:
+    if DuckDuckGoSearchRun is None:  # pragma: no cover
+        logger.warning("DuckDuckGo tool unavailable: missing langchain_community")
         return None
+
+    search = DuckDuckGoSearchRun()
+    return Tool(
+        name="web_search",
+        func=search.run,
+        description="General web search for news/current info (e.g., 'latest AI news').",
+    )
 
 
 def yahoo_finance_tool() -> Tool:
     """Yahoo Finance stock data (free)."""
+    if yf is None:  # pragma: no cover
+        logger.warning("Stock data tool unavailable: missing yfinance")
+        return None
 
     def get_stock_price(ticker: str) -> str:
         symbol = (ticker or "").strip().split()[0].upper()

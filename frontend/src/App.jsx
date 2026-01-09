@@ -4,6 +4,7 @@ import ChatInterface from './components/ChatInterface';
 import ModelSelector from './components/ModelSelector';
 import LoginScreen from './components/LoginScreen';
 import SetupWizard from './components/SetupWizard';
+import SettingsModal from './components/SettingsModal';
 import { ToastContainer } from './components/Toast';
 import { useAuthStore } from './store/authStore';
 import { api } from './api';
@@ -16,6 +17,7 @@ function App() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [driveStatus, setDriveStatus] = useState({ enabled: false, configured: false });
   const [authChecked, setAuthChecked] = useState(false);
   const [authEnabled, setAuthEnabled] = useState(true);
@@ -115,7 +117,7 @@ function App() {
         // Default to auth enabled if check fails
         setAuthChecked(true);
       });
-  }, [setupChecked, setupRequired]);
+  }, [setupChecked, setupRequired, isAuthenticated, login]);
 
   // Check Google Drive status on mount
   useEffect(() => {
@@ -123,25 +125,6 @@ function App() {
       .then(setDriveStatus)
       .catch((err) => console.log('Drive not configured:', err));
   }, []);
-
-  // Load conversations on mount (only if authenticated)
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadConversations();
-    }
-  }, [isAuthenticated]);
-
-  // Keep ref in sync with state for use in callbacks
-  useEffect(() => {
-    currentConversationIdRef.current = currentConversationId;
-  }, [currentConversationId]);
-
-  // Load conversation details when selected
-  useEffect(() => {
-    if (currentConversationId) {
-      loadConversation(currentConversationId);
-    }
-  }, [currentConversationId]);
 
   const loadConversations = async () => {
     try {
@@ -174,14 +157,33 @@ function App() {
     }
   };
 
+  // Load conversations on mount (only if authenticated)
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadConversations();
+    }
+  }, [isAuthenticated]);
+
+  // Keep ref in sync with state for use in callbacks
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  // Load conversation details when selected
+  useEffect(() => {
+    if (currentConversationId) {
+      loadConversation(currentConversationId);
+    }
+  }, [currentConversationId]);
+
   const handleNewConversation = () => {
     // Show model selector modal instead of creating directly
     setShowModelSelector(true);
   };
 
-  const handleModelSelectionConfirm = async ({ models, chairman }) => {
+  const handleModelSelectionConfirm = async ({ models, chairman, executionMode }) => {
     try {
-      const newConv = await api.createConversation({ models, chairman, username });
+      const newConv = await api.createConversation({ models, chairman, executionMode, username });
       setConversations([
         {
           id: newConv.id,
@@ -210,7 +212,7 @@ function App() {
     setCurrentConversationId(id);
   };
 
-  const handleDeleteConversation = async (id, e) => {
+  const handleDeleteConversation = async (id) => {
     try {
       await api.deleteConversation(id);
       // If deleted conversation was current, clear it
@@ -587,6 +589,7 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onOpenSettings={() => setShowSettings(true)}
         onDeleteConversation={handleDeleteConversation}
         onDeleteAllConversations={handleDeleteAllConversations}
         onUpdateTitle={handleUpdateTitle}
@@ -604,6 +607,10 @@ function App() {
         isOpen={showModelSelector}
         onClose={() => setShowModelSelector(false)}
         onConfirm={handleModelSelectionConfirm}
+      />
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
       />
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

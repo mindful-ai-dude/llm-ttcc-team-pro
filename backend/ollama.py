@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
-    timeout: float = None
+    timeout: float = None,
+    temperature: float | None = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via Ollama API.
@@ -34,6 +35,8 @@ async def query_model(
         "messages": messages,
         "stream": False,
     }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -67,7 +70,8 @@ async def query_model(
 
 async def query_models_parallel(
     models: List[str],
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    temperature: float | None = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -82,7 +86,7 @@ async def query_models_parallel(
     import asyncio
 
     # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
+    tasks = [query_model(model, messages, temperature=temperature) for model in models]
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)
@@ -93,7 +97,8 @@ async def query_models_parallel(
 
 async def query_models_streaming(
     models: List[str],
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    temperature: float | None = None,
 ):
     """
     Query multiple models in parallel and yield results as they complete.
@@ -115,7 +120,7 @@ async def query_models_streaming(
     async def query_with_name(model: str):
         req_start = time.time() - start_time
         logger.debug("[PARALLEL] Starting request to %s at t=%.2fs", model, req_start)
-        response = await query_model(model, messages)
+        response = await query_model(model, messages, temperature=temperature)
         req_end = time.time() - start_time
         logger.debug("[PARALLEL] Got response from %s at t=%.2fs", model, req_end)
         return (model, response)
@@ -137,7 +142,8 @@ async def query_models_with_stage_timeout(
     messages: List[Dict[str, str]],
     stage: str = None,
     stage_timeout: float = 90.0,
-    min_results: int = 3
+    min_results: int = 3,
+    temperature: float | None = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel with overall stage timeout.
@@ -169,7 +175,7 @@ async def query_models_with_stage_timeout(
 
     # Create named tasks
     async def query_with_name(model: str):
-        response = await query_model(model, messages)
+        response = await query_model(model, messages, temperature=temperature)
         return (model, response)
 
     # Create ALL tasks at once

@@ -6,8 +6,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
-import bcrypt
-import jwt
+try:  # pragma: no cover
+    import bcrypt
+except ImportError:  # pragma: no cover
+    bcrypt = None
+try:  # pragma: no cover
+    import jwt
+except ImportError:  # pragma: no cover
+    jwt = None
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -48,6 +54,14 @@ def _init_users_from_env():
 
     Passwords are hashed with bcrypt at startup.
     """
+    # If auth is disabled, don't require bcrypt or load users at import time.
+    if not AUTH_ENABLED:
+        return
+
+    if bcrypt is None:
+        logger.error("AUTH_ENABLED=true but bcrypt is not installed. Install bcrypt to enable authentication.")
+        return
+
     auth_users_json = os.getenv("AUTH_USERS", "{}")
 
     try:
@@ -114,6 +128,8 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password string
     """
+    if bcrypt is None:
+        raise RuntimeError("bcrypt is required for password hashing; install bcrypt to enable authentication.")
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
@@ -128,6 +144,8 @@ def verify_password(password: str, password_hash: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
+    if bcrypt is None:
+        return False
     try:
         return bcrypt.checkpw(password.encode(), password_hash.encode())
     except Exception:
@@ -147,6 +165,8 @@ def create_token(username: str) -> tuple[str, int]:
     Raises:
         ValueError: If JWT_SECRET is not configured
     """
+    if jwt is None:
+        raise RuntimeError("PyJWT is required for token creation; install PyJWT to enable authentication.")
     if not JWT_SECRET:
         raise ValueError("JWT_SECRET environment variable must be set")
 
@@ -175,6 +195,9 @@ def validate_token(token: str) -> Optional[str]:
     Returns:
         Username if token is valid, None otherwise
     """
+    if jwt is None:
+        logger.error("PyJWT not installed - authentication disabled")
+        return None
     if not JWT_SECRET:
         logger.error("JWT_SECRET not configured")
         return None
@@ -186,11 +209,17 @@ def validate_token(token: str) -> Optional[str]:
         if username and username in USERS:
             return username
         return None
-    except jwt.ExpiredSignatureError:
-        logger.debug("Token expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        logger.debug(f"Invalid token: {e}")
+    except Exception as e:
+        # If PyJWT is present, it defines these exception types; if not, we already returned above.
+        expired = getattr(jwt, "ExpiredSignatureError", None)
+        invalid = getattr(jwt, "InvalidTokenError", None)
+        if expired and isinstance(e, expired):
+            logger.debug("Token expired")
+            return None
+        if invalid and isinstance(e, invalid):
+            logger.debug(f"Invalid token: {e}")
+            return None
+        logger.debug(f"Token validation error: {e}")
         return None
 
 
@@ -205,6 +234,12 @@ def authenticate(username: str, password: str) -> LoginResponse:
     Returns:
         LoginResponse with success status and JWT token if successful
     """
+    if not AUTH_ENABLED:
+        return LoginResponse(
+            success=False,
+            error="Authentication is disabled"
+        )
+
     if not username or not password:
         return LoginResponse(
             success=False,

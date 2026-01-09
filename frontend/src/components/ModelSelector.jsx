@@ -5,6 +5,7 @@ import './ModelSelector.css';
 // LocalStorage keys
 const LAST_USED_KEY = 'llm-council-last-selection';
 const LAST_CHAIRMAN_KEY = 'llm-council-last-chairman';
+const LAST_EXECUTION_MODE_KEY = 'llm-council-last-execution-mode';
 
 // Default max models (can be overridden by backend config)
 const DEFAULT_MAX_MODELS = 5;
@@ -53,6 +54,7 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
   const [loadError, setLoadError] = useState(null);
   const [selectedModels, setSelectedModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
+  const [executionMode, setExecutionMode] = useState('full'); // chat_only | chat_ranking | full
   const [activePreset, setActivePreset] = useState(null);
   const [maxModels, setMaxModels] = useState(DEFAULT_MAX_MODELS);
 
@@ -103,7 +105,7 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
     try {
       const saved = localStorage.getItem(LAST_USED_KEY);
       if (saved) {
-        const { models, chairman } = JSON.parse(saved);
+        const { models, chairman, executionMode: savedMode } = JSON.parse(saved);
         // Verify models still exist
         const validModels = models.filter((m) => allModels.some((am) => am.id === m));
         const validChairman = allModels.some((am) => am.id === chairman) ? chairman : '';
@@ -111,6 +113,9 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
         if (validModels.length >= MIN_MODELS && validChairman) {
           setSelectedModels(validModels);
           setChairmanModel(validChairman);
+          if (savedMode) {
+            setExecutionMode(savedMode);
+          }
           setActivePreset('last');
           // Auto-scroll to first selected model
           setTimeout(() => scrollToModel(validModels[0]), 100);
@@ -124,29 +129,23 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
     applyPreset('free');
   };
 
-  const saveLastUsedSelection = (models, chairman) => {
+  const saveLastUsedSelection = (models, chairman, mode) => {
     try {
       localStorage.setItem(
         LAST_USED_KEY,
-        JSON.stringify({ models, chairman, timestamp: Date.now() })
+        JSON.stringify({ models, chairman, executionMode: mode, timestamp: Date.now() })
       );
       // Also save chairman separately for quick access
       if (chairman) {
         localStorage.setItem(LAST_CHAIRMAN_KEY, chairman);
       }
+      if (mode) {
+        localStorage.setItem(LAST_EXECUTION_MODE_KEY, mode);
+      }
     } catch (e) {
       console.error('Failed to save last selection:', e);
     }
   };
-
-  // Load just the last chairman (for initial default)
-  const getLastChairman = useCallback(() => {
-    try {
-      return localStorage.getItem(LAST_CHAIRMAN_KEY) || '';
-    } catch {
-      return '';
-    }
-  }, []);
 
   // Scroll to a specific model card
   const scrollToModel = useCallback((modelId) => {
@@ -333,11 +332,12 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
   const handleConfirm = () => {
     if (selectedModels.length >= MIN_MODELS && chairmanModel) {
       // Save as last used
-      saveLastUsedSelection(selectedModels, chairmanModel);
+      saveLastUsedSelection(selectedModels, chairmanModel, executionMode);
 
       onConfirm({
         models: selectedModels,
         chairman: chairmanModel,
+        executionMode,
       });
       onClose();
     }
@@ -461,6 +461,32 @@ export default function ModelSelector({ isOpen, onClose, onConfirm }) {
             </div>
           </div>
         )}
+
+        {/* Execution Mode */}
+        <div className="selected-models-section" style={{ paddingTop: 0 }}>
+          <h3>Execution Mode</h3>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              value={executionMode}
+              onChange={(e) => setExecutionMode(e.target.value)}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: '#fff',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                minWidth: '240px'
+              }}
+            >
+              <option value="full">Full (Stage 1 + 2 + 3)</option>
+              <option value="chat_ranking">Chat + Ranking (Stage 1 + 2)</option>
+              <option value="chat_only">Chat Only (Stage 1)</option>
+            </select>
+            <div style={{ opacity: 0.8, fontSize: '13px', lineHeight: 1.4 }}>
+              Choose how deep the council deliberates for this conversation.
+            </div>
+          </div>
+        </div>
 
         {/* Filters */}
         <div className="filters-section">

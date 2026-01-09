@@ -47,6 +47,14 @@ from .auth import LoginRequest, authenticate, validate_auth_token, validate_toke
 from .config import AUTH_ENABLED, MIN_CHAIRMAN_CONTEXT
 from .gdrive import upload_to_drive, get_drive_status, is_drive_configured
 from .database import init_database
+from .runtime_settings import (
+    RuntimeSettings,
+    get_runtime_settings,
+    update_runtime_settings,
+    reset_runtime_settings,
+    default_runtime_settings,
+    save_runtime_settings,
+)
 
 app = FastAPI(title="LLM Council API")
 
@@ -121,6 +129,7 @@ class CreateConversationRequest(BaseModel):
     models: Optional[List[str]] = Field(default=None, max_length=20)  # Council models (max 20)
     chairman: Optional[str] = Field(default=None, max_length=100)  # Chairman/judge model
     username: Optional[str] = Field(default=None, max_length=50)  # User who created the conversation
+    execution_mode: Optional[str] = Field(default=None, pattern="^(chat_only|chat_ranking|full)$")
 
 
 class FileAttachment(BaseModel):
@@ -175,6 +184,19 @@ class Conversation(BaseModel):
     models: Optional[List[str]] = None
     chairman: Optional[str] = None
     username: Optional[str] = None
+    execution_mode: Optional[str] = None
+
+
+class UpdateRuntimeSettingsRequest(BaseModel):
+    """Partial update for runtime settings (non-secret)."""
+
+    stage1_prompt_template: Optional[str] = Field(default=None, max_length=200_000)
+    stage2_prompt_template: Optional[str] = Field(default=None, max_length=200_000)
+    stage3_prompt_template: Optional[str] = Field(default=None, max_length=200_000)
+
+    council_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    stage2_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    chairman_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
 
 
 @app.get("/")
@@ -187,6 +209,53 @@ async def root():
 async def get_api_version():
     """Get API version."""
     return {"version": VERSION}
+
+# ==================== Runtime Settings (Non-secret) ====================
+
+
+@app.get("/api/settings")
+async def get_settings_endpoint(current_user: str = Depends(get_current_user)):
+    """Get runtime settings (prompt templates + temperatures)."""
+    return get_runtime_settings().model_dump()
+
+
+@app.patch("/api/settings")
+async def update_settings_endpoint(
+    request: UpdateRuntimeSettingsRequest,
+    current_user: str = Depends(get_current_user),
+):
+    """Patch runtime settings (non-secret)."""
+    patch = {k: v for k, v in request.model_dump().items() if v is not None}
+    updated = update_runtime_settings(**patch) if patch else get_runtime_settings()
+    return updated.model_dump()
+
+
+@app.get("/api/settings/defaults")
+async def get_settings_defaults_endpoint(current_user: str = Depends(get_current_user)):
+    """Get default runtime settings."""
+    return default_runtime_settings().model_dump()
+
+
+@app.post("/api/settings/reset")
+async def reset_settings_endpoint(current_user: str = Depends(get_current_user)):
+    """Reset runtime settings to defaults."""
+    return reset_runtime_settings().model_dump()
+
+
+@app.get("/api/settings/export")
+async def export_settings_endpoint(current_user: str = Depends(get_current_user)):
+    """Export runtime settings as JSON (same shape as GET /api/settings)."""
+    return get_runtime_settings().model_dump()
+
+
+@app.post("/api/settings/import")
+async def import_settings_endpoint(
+    request: RuntimeSettings,
+    current_user: str = Depends(get_current_user),
+):
+    """Import runtime settings from JSON (API keys are never part of this schema)."""
+    save_runtime_settings(request)
+    return request.model_dump()
 
 
 # ==================== Setup Wizard Endpoints ====================
@@ -644,7 +713,8 @@ async def create_conversation(
         conversation_id,
         models=request.models,
         chairman=request.chairman,
-        username=username
+        username=username,
+        execution_mode=request.execution_mode or "full",
     )
     return conversation
 
@@ -943,6 +1013,9 @@ async def send_message_stream(
     # Get custom models and chairman from conversation (if set)
     conv_models = conversation.get("models")
     conv_chairman = conversation.get("chairman")
+    execution_mode = (conversation.get("execution_mode") or "full").strip().lower()
+    if execution_mode not in {"chat_only", "chat_ranking", "full"}:
+        execution_mode = "full"
 
     async def event_generator():
         # Initialize state variables OUTSIDE try block so finally can access them
@@ -973,7 +1046,10 @@ async def send_message_stream(
 
             images_for_council = image_attachments if image_attachments else None
             # Determine web search provider (prefer explicit provider, fallback to legacy boolean)
-            web_search_provider = request.web_search_provider or ('tavily' if request.web_search else None)
+            web_search_provider = (
+                getattr(request, "web_search_provider", None)
+                or ("tavily" if getattr(request, "web_search", False) else None)
+            )
 
             async for item in stage1_collect_responses_streaming(
                 full_query,
@@ -997,6 +1073,34 @@ async def send_message_stream(
             stage1_end_time = time.time()
             stage1_duration = stage1_end_time - stage1_start_time
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'timestamp': stage1_end_time, 'duration': stage1_duration})}\n\n"
+
+            # Execution mode: chat_only stops after Stage 1
+            if execution_mode == "chat_only":
+                token_stats = get_token_stats()
+                metadata = {
+                    "execution_mode": execution_mode,
+                    "tool_outputs": tool_outputs,
+                    "token_stats": token_stats,
+                }
+                storage.add_assistant_message(
+                    conversation_id,
+                    stage1_results,
+                    None,
+                    None,
+                    metadata
+                )
+                message_saved = True
+
+                if token_stats.get('total'):
+                    yield f"data: {json.dumps({'type': 'token_stats', 'data': token_stats})}\n\n"
+
+                if title_task:
+                    title = await title_task
+                    storage.update_conversation_title(conversation_id, title)
+                    yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+
+                yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+                return
 
             # Stage 2: Collect rankings with heartbeat to prevent CloudFront timeout
             stage2_start_time = time.time()
@@ -1032,6 +1136,36 @@ async def send_message_stream(
             logger.info("[STREAMING] About to yield stage2_complete (%d results)", len(stage2_results))
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}, 'timestamp': stage2_end_time, 'duration': stage2_duration})}\n\n"
             logger.info("[STREAMING] Stage 2 complete yielded successfully, proceeding to Stage 3")
+
+            # Execution mode: chat_ranking stops after Stage 2
+            if execution_mode == "chat_ranking":
+                token_stats = get_token_stats()
+                metadata = {
+                    "execution_mode": execution_mode,
+                    "label_to_model": label_to_model,
+                    "aggregate_rankings": aggregate_rankings,
+                    "tool_outputs": tool_outputs,
+                    "token_stats": token_stats,
+                }
+                storage.add_assistant_message(
+                    conversation_id,
+                    stage1_results,
+                    stage2_results,
+                    None,
+                    metadata
+                )
+                message_saved = True
+
+                if token_stats.get('total'):
+                    yield f"data: {json.dumps({'type': 'token_stats', 'data': token_stats})}\n\n"
+
+                if title_task:
+                    title = await title_task
+                    storage.update_conversation_title(conversation_id, title)
+                    yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+
+                yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+                return
 
             # Stage 3: Synthesize final answer with heartbeat
             stage3_start_time = time.time()

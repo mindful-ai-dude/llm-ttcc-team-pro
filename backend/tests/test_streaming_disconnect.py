@@ -77,7 +77,8 @@ class TestStreamingDisconnect:
             async for chunk in generator:
                 events_received.append(chunk)
                 # Parse the SSE event
-                if b'stage1_complete' in chunk:
+                chunk_bytes = chunk if isinstance(chunk, (bytes, bytearray)) else str(chunk).encode()
+                if b'stage1_complete' in chunk_bytes:
                     # Client "disconnects" after stage1 by closing the generator
                     await generator.aclose()
                     break
@@ -137,12 +138,14 @@ class TestStreamingDisconnect:
         patch('backend.main.stage1_collect_responses_streaming', mock_stage1_streaming), \
         patch('backend.main.stage2_collect_rankings', mock_stage2), \
         patch('backend.main.stage3_synthesize_final', mock_stage3), \
-        patch('backend.main.generate_conversation_title', return_value="Test Title"), \
+        patch('backend.main.generate_conversation_title', new=AsyncMock(return_value="Test Title")), \
         patch('backend.main.calculate_aggregate_rankings', return_value=[]):
 
             class MockRequest:
                 content = "Test query"
                 attachments = None
+                web_search = False
+                web_search_provider = None
 
             response = await send_message_stream(conversation_id, MockRequest())
 
