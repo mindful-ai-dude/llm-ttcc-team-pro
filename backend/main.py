@@ -344,18 +344,35 @@ async def generate_secret(type: str = "jwt"):
 async def save_setup_config(request: SetupConfigRequest):
     """
     Save configuration to .env file.
-    This endpoint is only available when setup is required.
+    This endpoint is only available when setup is required (first run).
+    After initial setup, this endpoint is disabled for security.
     """
     from .config import ROUTER_TYPE, OPENROUTER_API_KEY
     import os
     from pathlib import Path
 
-    # Only allow setup when not configured
+    # Find .env file location
+    env_path = Path(__file__).parent.parent / ".env"
+
+    # Security check: Only allow setup when not yet configured
+    # Check for SETUP_COMPLETE flag or existing valid configuration
     if ROUTER_TYPE == "openrouter" and OPENROUTER_API_KEY:
         raise HTTPException(
             status_code=403,
             detail="Application is already configured. Edit .env file manually to change settings."
         )
+
+    # For Ollama: check if setup was already completed (SETUP_COMPLETE flag in .env)
+    if env_path.exists():
+        try:
+            env_content = env_path.read_text()
+            if "SETUP_COMPLETE=true" in env_content:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Application is already configured. Edit .env file manually to change settings."
+                )
+        except Exception:
+            pass  # If we can't read, proceed with setup
 
     # Find .env file location
     env_path = Path(__file__).parent.parent / ".env"
@@ -405,6 +422,11 @@ async def save_setup_config(request: SetupConfigRequest):
     # Add new/updated values
     for key, value in updates.items():
         existing_lines.append(f"{key}={value}")
+
+    # Mark setup as complete (prevents re-running setup endpoint)
+    if "SETUP_COMPLETE" not in existing_keys:
+        existing_lines.append("SETUP_COMPLETE=true")
+        updates["SETUP_COMPLETE"] = "true"
 
     # Write back
     with open(env_path, 'w') as f:
