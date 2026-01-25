@@ -455,6 +455,7 @@ async def save_setup_config(request: SetupConfigRequest):
 # Cache for models per router_type (5 minute TTL)
 # Shape: { "openrouter": {"data": {...}, "timestamp": 123}, "ollama": {...} }
 _models_cache: Dict[str, Dict[str, Any]] = {}
+_models_cache_lock = asyncio.Lock()  # Thread-safe cache access
 _MODELS_CACHE_TTL = 300  # 5 minutes
 
 
@@ -547,16 +548,15 @@ async def get_available_models(router_type: Optional[str] = None):
     """
     from .config import OPENROUTER_API_KEY, OLLAMA_HOST, MIN_CHAIRMAN_CONTEXT
 
-    global _models_cache
-
     effective_router_type = (router_type or ROUTER_TYPE or "openrouter").lower()
     if effective_router_type not in {"openrouter", "ollama"}:
         raise HTTPException(status_code=400, detail="Invalid router_type. Must be 'openrouter' or 'ollama'.")
 
-    # Check cache
-    cache_entry = _models_cache.get(effective_router_type)
-    if cache_entry and cache_entry.get("data") and (time.time() - cache_entry.get("timestamp", 0)) < _MODELS_CACHE_TTL:
-        return cache_entry["data"]
+    # Check cache with lock for thread safety
+    async with _models_cache_lock:
+        cache_entry = _models_cache.get(effective_router_type)
+        if cache_entry and cache_entry.get("data") and (time.time() - cache_entry.get("timestamp", 0)) < _MODELS_CACHE_TTL:
+            return cache_entry["data"]
 
     if effective_router_type == "ollama":
         # Fetch from Ollama local API
@@ -585,7 +585,8 @@ async def get_available_models(router_type: Optional[str] = None):
 
                 from .config import MAX_COUNCIL_MODELS
                 result = {"models": models, "router_type": "ollama", "max_models": MAX_COUNCIL_MODELS}
-                _models_cache[effective_router_type] = {"data": result, "timestamp": time.time()}
+                async with _models_cache_lock:
+                    _models_cache[effective_router_type] = {"data": result, "timestamp": time.time()}
                 return result
 
         except httpx.RequestError as e:
@@ -660,7 +661,8 @@ async def get_available_models(router_type: Optional[str] = None):
 
                 from .config import MAX_COUNCIL_MODELS
                 result = {"models": models, "router_type": "openrouter", "count": len(models), "max_models": MAX_COUNCIL_MODELS}
-                _models_cache[effective_router_type] = {"data": result, "timestamp": time.time()}
+                async with _models_cache_lock:
+                    _models_cache[effective_router_type] = {"data": result, "timestamp": time.time()}
                 return result
 
         except httpx.RequestError as e:
@@ -744,7 +746,8 @@ async def create_conversation(
     """Create a new conversation. Requires authentication."""
     # Validate chairman model context length if specified
     router_type = (getattr(request, "router_type", None) or ROUTER_TYPE or "openrouter").strip().lower()
-    cache_entry = _models_cache.get(router_type)
+    async with _models_cache_lock:
+        cache_entry = _models_cache.get(router_type)
     if request.chairman and cache_entry and cache_entry.get("data"):
         models = cache_entry["data"].get("models", [])
         chairman_model = next((m for m in models if m["id"] == request.chairman), None)
