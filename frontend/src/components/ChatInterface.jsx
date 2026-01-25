@@ -28,6 +28,7 @@ function RealtimeTimer({ startTime }) {
   const [actualStartTime, setActualStartTime] = useState(() => {
     return startTime || Date.now() / 1000;
   });
+  const animationTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (startTime) {
@@ -41,13 +42,23 @@ function RealtimeTimer({ startTime }) {
       const newElapsed = now - actualStartTime;
       setElapsed(Math.max(0, newElapsed));
       setIsAnimating(true);
-      setTimeout(() => setIsAnimating(false), 100);
+      // Clear previous timeout before setting new one
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+      animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100);
     };
 
     updateElapsed();
     const interval = setInterval(updateElapsed, 50);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Clean up the animation timeout on unmount
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
   }, [actualStartTime]);
 
   return (
