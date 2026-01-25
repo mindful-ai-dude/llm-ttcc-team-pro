@@ -34,15 +34,21 @@ if sys.platform == 'win32':
         Args:
             file_handle: Open file handle
             exclusive: If True, use exclusive lock (for writing). If False, use shared lock (for reading).
+
+        Note: msvcrt.locking() doesn't support true shared locks like POSIX fcntl.
+        Both LK_LOCK and LK_RLCK are exclusive locks in msvcrt. For true shared
+        lock semantics on Windows, win32file.LockFileEx would be needed.
+        We use LK_LOCK for exclusive and LK_RLCK for "shared" (still exclusive
+        but indicates intent). This is acceptable for the current use case.
         """
         # Windows msvcrt.locking requires file position and length
         # Lock first byte as a simple file lock
         try:
             # Move to beginning of file
             file_handle.seek(0)
-            # LK_NBLCK = non-blocking exclusive lock, LK_NBRLCK = non-blocking shared lock
-            # Using LK_LOCK (blocking) for simplicity
-            lock_mode = msvcrt.LK_LOCK if exclusive else msvcrt.LK_LOCK
+            # LK_LOCK = blocking exclusive lock (value 2)
+            # LK_RLCK = blocking read lock (value 3) - Note: still exclusive in msvcrt
+            lock_mode = msvcrt.LK_LOCK if exclusive else msvcrt.LK_RLCK
             msvcrt.locking(file_handle.fileno(), lock_mode, 1)
             yield
         finally:
