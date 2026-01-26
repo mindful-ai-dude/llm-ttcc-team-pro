@@ -691,7 +691,18 @@ async def stage1_collect_responses_streaming(
             max_results=max_results,
             full_content_results=full_content_results,
         )
-        logger.info("[STAGE1-STREAM] Web search returned %d results", len(tool_outputs))
+        # Count results - different providers use different formats
+        result_text = tool_outputs[0].get("result", "") if tool_outputs else ""
+        # DuckDuckGo/Brave use "Result N:", Exa/Tavily use "---" separators or "**Title**"
+        if "Result " in result_text:
+            actual_count = result_text.count("Result ")
+        elif "---" in result_text:
+            actual_count = result_text.count("---") + 1
+        elif "**" in result_text:
+            actual_count = result_text.count("**") // 2  # Each result has opening and closing **
+        else:
+            actual_count = 1 if result_text else 0
+        logger.info("[STAGE1-STREAM] Web search completed: %d results, %d chars", actual_count, len(result_text))
     # Regular tool detection (Feature 4)
     elif requires_tools(user_query):
         logger.debug("[STAGE1-STREAM] requires_tools(%s...): %s", user_query[:30], requires_tools(user_query))
@@ -707,7 +718,8 @@ Search Results:
             f"- {item['tool']}: {item['result']}" for item in tool_outputs
         )
         messages.insert(0, {"role": "system", "content": tool_text})
-        logger.debug("[STAGE1-STREAM] Injected system message with %d chars", len(tool_text))
+        logger.info("[STAGE1-STREAM] Injected search context: %d chars", len(tool_text))
+        logger.debug("[STAGE1-STREAM] Search context preview: %s...", tool_text[:500])
 
     # Add memory context if enabled (Feature 4)
     if ENABLE_MEMORY and conversation_id:
