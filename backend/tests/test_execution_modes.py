@@ -15,11 +15,14 @@ def test_storage_add_assistant_message_allows_stage_omission_for_chat_only():
     conversation = {"id": conversation_id, "messages": []}
     saved = []
 
-    def save_spy(conv):
-        saved.append(conv)
+    def update_spy(cid, update_fn):
+        assert cid == conversation_id
+        update_fn(conversation)
+        saved.append(conversation)
+        return conversation
 
-    with patch.object(storage, "get_conversation", return_value=conversation), patch.object(
-        storage, "save_conversation", side_effect=save_spy
+    with patch.object(storage, "is_using_database", return_value=False), patch.object(
+        storage, "_json_update_conversation", side_effect=update_spy
     ):
         storage.add_assistant_message(
             conversation_id,
@@ -48,11 +51,14 @@ def test_storage_add_assistant_message_allows_stage3_omission_for_chat_ranking()
     conversation = {"id": conversation_id, "messages": []}
     saved = []
 
-    def save_spy(conv):
-        saved.append(conv)
+    def update_spy(cid, update_fn):
+        assert cid == conversation_id
+        update_fn(conversation)
+        saved.append(conversation)
+        return conversation
 
-    with patch.object(storage, "get_conversation", return_value=conversation), patch.object(
-        storage, "save_conversation", side_effect=save_spy
+    with patch.object(storage, "is_using_database", return_value=False), patch.object(
+        storage, "_json_update_conversation", side_effect=update_spy
     ):
         storage.add_assistant_message(
             conversation_id,
