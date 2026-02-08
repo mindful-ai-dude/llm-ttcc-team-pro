@@ -25,16 +25,11 @@ function formatFileSize(bytes) {
 function RealtimeTimer({ startTime }) {
   const [elapsed, setElapsed] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [actualStartTime, setActualStartTime] = useState(() => {
-    return startTime || Date.now() / 1000;
-  });
+  // Keep a stable start time without "derived state via effect" (lint rule: react-hooks/set-state-in-effect).
+  // We intentionally avoid refs during render (lint rule: react-hooks/refs) by using a lazy state fallback.
+  const [fallbackStartTime] = useState(() => Date.now() / 1000);
+  const actualStartTime = startTime || fallbackStartTime;
   const animationTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    if (startTime) {
-      setActualStartTime(startTime);
-    }
-  }, [startTime]);
 
   useEffect(() => {
     const updateElapsed = () => {

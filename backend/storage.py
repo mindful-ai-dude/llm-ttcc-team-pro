@@ -12,9 +12,9 @@ import os
 import sys
 from contextlib import contextmanager
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Generator
+from typing import List, Dict, Any, Optional, Generator, Callable
 from pathlib import Path
-from .config import DATA_DIR, DATABASE_TYPE, ROUTER_TYPE
+from . import config
 from .database import is_using_database, SessionLocal
 from .models import Conversation as ConversationModel
 
@@ -87,7 +87,7 @@ else:
 
 def ensure_data_dir():
     """Ensure the data directory exists."""
-    Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
+    Path(config.DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
 def validate_conversation_id(conversation_id: str) -> bool:
@@ -126,11 +126,11 @@ def get_conversation_path(conversation_id: str) -> str:
     if not validate_conversation_id(conversation_id):
         raise ValueError(f"Invalid conversation ID format: {conversation_id}")
 
-    path = os.path.join(DATA_DIR, f"{conversation_id}.json")
+    path = os.path.join(config.DATA_DIR, f"{conversation_id}.json")
 
     # Double-check: ensure resolved path is within DATA_DIR
     real_path = os.path.realpath(path)
-    real_data_dir = os.path.realpath(DATA_DIR)
+    real_data_dir = os.path.realpath(config.DATA_DIR)
     if not real_path.startswith(real_data_dir + os.sep):
         raise ValueError(f"Path traversal detected: {conversation_id}")
 
@@ -190,14 +190,45 @@ def _json_save_conversation(conversation: Dict[str, Any]):
             json.dump(conversation, f, indent=2)
 
 
+def _json_update_conversation(conversation_id: str, update_fn: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
+    """
+    Atomically update a JSON conversation under a single exclusive file lock.
+
+    This prevents lost updates when multiple requests concurrently modify the same
+    conversation (read-modify-write must be a single critical section).
+    """
+    ensure_data_dir()
+    path = get_conversation_path(conversation_id)
+    if not os.path.exists(path):
+        raise ValueError(f"Conversation {conversation_id} not found")
+
+    # Use one file handle + one exclusive lock for the full read-modify-write cycle.
+    with open(path, "r+", encoding="utf-8") as f:
+        with file_lock(f, exclusive=True):
+            f.seek(0)
+            conversation = json.load(f)
+            update_fn(conversation)
+            f.seek(0)
+            f.truncate()
+            json.dump(conversation, f, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                # Best-effort: fsync may not be available on some platforms/filesystems.
+                pass
+
+            return conversation
+
+
 def _json_list_conversations() -> List[Dict[str, Any]]:
     """List all conversations from JSON files with shared locks."""
     ensure_data_dir()
 
     conversations = []
-    for filename in os.listdir(DATA_DIR):
+    for filename in os.listdir(config.DATA_DIR):
         if filename.endswith('.json'):
-            path = os.path.join(DATA_DIR, filename)
+            path = os.path.join(config.DATA_DIR, filename)
             try:
                 with open(path, 'r') as f:
                     with file_lock(f, exclusive=False):
@@ -232,9 +263,9 @@ def _json_delete_all_conversations():
     """Delete all conversations from JSON files."""
     ensure_data_dir()
 
-    for filename in os.listdir(DATA_DIR):
+    for filename in os.listdir(config.DATA_DIR):
         if filename.endswith('.json'):
-            path = os.path.join(DATA_DIR, filename)
+            path = os.path.join(config.DATA_DIR, filename)
             os.remove(path)
 
 
@@ -457,7 +488,7 @@ def _normalize_conversation(conversation: Optional[Dict[str, Any]]) -> Optional[
     if not conversation.get("router_type"):
         inferred = _infer_router_type_from_models(conversation.get("models"))
         conversation = conversation.copy()
-        conversation["router_type"] = inferred or ROUTER_TYPE
+        conversation["router_type"] = inferred or config.ROUTER_TYPE
 
     return conversation
 
@@ -482,16 +513,26 @@ def add_user_message(conversation_id: str, content: str):
         conversation_id: Conversation identifier
         content: User message content
     """
-    conversation = get_conversation(conversation_id)
-    if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
+    if is_using_database():
+        conversation = get_conversation(conversation_id)
+        if conversation is None:
+            raise ValueError(f"Conversation {conversation_id} not found")
 
-    conversation["messages"].append({
-        "role": "user",
-        "content": content
-    })
+        conversation["messages"].append({
+            "role": "user",
+            "content": content
+        })
 
-    save_conversation(conversation)
+        save_conversation(conversation)
+        return
+
+    def _update(conv: Dict[str, Any]) -> None:
+        conv.setdefault("messages", []).append({
+            "role": "user",
+            "content": content
+        })
+
+    _json_update_conversation(conversation_id, _update)
 
 
 def add_assistant_message(
@@ -513,10 +554,6 @@ def add_assistant_message(
         stage3: Final synthesized response (optional)
         metadata: Optional metadata including label_to_model and aggregate_rankings
     """
-    conversation = get_conversation(conversation_id)
-    if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
-
     message = {
         "role": "assistant",
         "stage1": stage1,
@@ -530,9 +567,19 @@ def add_assistant_message(
     if metadata:
         message["metadata"] = metadata
 
-    conversation["messages"].append(message)
+    if is_using_database():
+        conversation = get_conversation(conversation_id)
+        if conversation is None:
+            raise ValueError(f"Conversation {conversation_id} not found")
 
-    save_conversation(conversation)
+        conversation["messages"].append(message)
+        save_conversation(conversation)
+        return
+
+    def _update(conv: Dict[str, Any]) -> None:
+        conv.setdefault("messages", []).append(message)
+
+    _json_update_conversation(conversation_id, _update)
 
 
 def update_conversation_title(conversation_id: str, title: str):
@@ -543,12 +590,19 @@ def update_conversation_title(conversation_id: str, title: str):
         conversation_id: Conversation identifier
         title: New title for the conversation
     """
-    conversation = get_conversation(conversation_id)
-    if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
+    if is_using_database():
+        conversation = get_conversation(conversation_id)
+        if conversation is None:
+            raise ValueError(f"Conversation {conversation_id} not found")
 
-    conversation["title"] = title
-    save_conversation(conversation)
+        conversation["title"] = title
+        save_conversation(conversation)
+        return
+
+    def _update(conv: Dict[str, Any]) -> None:
+        conv["title"] = title
+
+    _json_update_conversation(conversation_id, _update)
 
 
 def delete_conversation(conversation_id: str) -> bool:
