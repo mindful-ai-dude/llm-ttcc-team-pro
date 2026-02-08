@@ -167,9 +167,20 @@ function App() {
 
   // Load conversations on mount (only if authenticated)
   useEffect(() => {
-    if (isAuthenticated) {
-      loadConversations();
-    }
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    api.listConversations()
+      .then((convs) => {
+        if (!cancelled) setConversations(convs);
+      })
+      .catch((error) => {
+        console.error('Failed to load conversations:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated]);
 
   // Keep ref in sync with state for use in callbacks

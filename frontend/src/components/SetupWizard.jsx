@@ -23,7 +23,8 @@ export default function SetupWizard({ onComplete }) {
     try {
       const { secret } = await api.generateSecret('jwt');
       setJwtSecret(secret);
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to generate JWT secret:', error);
       setError('Failed to generate JWT secret');
     }
   };
@@ -35,7 +36,8 @@ export default function SetupWizard({ onComplete }) {
       const newUsers = [...users];
       newUsers[index].password = secret;
       setUsers(newUsers);
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to generate password:', error);
       setError('Failed to generate password');
     }
   };
@@ -126,6 +128,10 @@ export default function SetupWizard({ onComplete }) {
 
       // Wait a moment then trigger reload
       setTimeout(() => {
+        if (typeof onComplete === 'function') {
+          onComplete();
+          return;
+        }
         window.location.reload();
       }, 2000);
     } catch (err) {
