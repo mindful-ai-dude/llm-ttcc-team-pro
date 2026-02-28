@@ -156,14 +156,43 @@ Models are selected via the Setup Wizard or dynamically in the UI. Browse all av
 
 ### Docker (Recommended)
 
+> **Prerequisite:** Docker Desktop must be running on your machine before executing any `docker compose` commands.
+
 ```bash
-# Start services
-docker compose up --build
+# First-time setup or after dependency changes — full rebuild (no cache)
+docker compose build --no-cache && docker compose up -d
+
+# Regular start (uses cached layers, faster)
+docker compose up --build -d
 
 # Access the application at http://localhost
 ```
 
 Backend API is available at http://localhost:8001
+
+**Stopping and managing containers:**
+```bash
+# Stop and remove all containers
+docker compose down
+
+# View running containers
+docker compose ps
+
+# View backend logs (useful for debugging)
+docker compose logs backend
+
+# Follow logs in real-time
+docker compose logs -f backend
+```
+
+**Troubleshooting: `ModuleNotFoundError` or import errors**
+
+If the backend crashes with missing module errors (e.g., `No module named 'langchain'`), Docker's build cache is likely stale. Force a full rebuild:
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
 
 ### Development Mode (without Docker)
 
