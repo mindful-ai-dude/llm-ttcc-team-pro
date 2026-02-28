@@ -1,8 +1,8 @@
 [project]
-name = "llm-council"
-version = "1.2.9"
-description = "Multi-LLM Council with democratic voting - Ask multiple AI models and let them evaluate each other"
-authors = [{name = "LLM Council Contributors"}]
+name = "llm-ttcc-team-pro"
+version = "1.4.0"
+description = "LLM-TTCC-TEAM-PRO - Multi-LLM deliberation and technical training course creation system"
+authors = [{name = "LLM-TTCC-TEAM-PRO Contributors"}]
 license = {text = "MIT"}
 keywords = ["llm", "ai", "council", "multiple-models", "openrouter", "chatbot"]
 readme = "README.md"

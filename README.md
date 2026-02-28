@@ -1,20 +1,20 @@
-# LLM Council Plus
+# LLM-TTCC-TEAM-PRO
 
 ![llmcouncil](header.jpg)
 
 > **Inspired by [Andrej Karpathy's LLM Council](https://github.com/karpathy/llm-council)** - see his [original tweet](https://x.com/karpathy/status/1992381094667411768) about the concept.
 
-The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, etc.), you can group them into your "LLM Council Plus". This is a containerized web app with a Setup Wizard that guides you through configuration. It uses OpenRouter to send your query to multiple LLMs, asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
+The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, etc.), you can group them into your "LLM-TTCC-TEAM-PRO" council. This is a containerized web app with a Setup Wizard that guides you through configuration. It uses OpenRouter to send your query to multiple LLMs, asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
 
 In a bit more detail, here is what happens when you submit a query:
 
 1. **Stage 1: First opinions**. The user query is given to all LLMs individually, and the responses are collected. The individual responses are shown in a "tab view", so that the user can inspect them all one by one.
 2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
-3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
+3. **Stage 3: Final response**. The designated Chairman takes all of the model's responses and compiles them into a single final answer that is presented to the user.
 
 ## Technical Training Course Creator (TTCC) Mode
 
-LLM Council Plus includes a built-in **Technical Training Course Creator** mode that transforms the council into an enterprise-grade course generation system. When TTCC mode is selected, a specialized system prompt is injected into all council models, turning them into expert instructional designers.
+LLM-TTCC-TEAM-PRO includes a built-in **Technical Training Course Creator** mode that transforms the council into an enterprise-grade course generation system. When TTCC mode is selected, a specialized system prompt is injected into all council models, turning them into expert instructional designers.
 
 ### TTCC Features
 
@@ -40,7 +40,7 @@ The TTCC system prompt is defined in [`Technical_Training_Course_Creator_System_
 
 This fork extends [Andrej Karpathy's llm-council](https://github.com/karpathy/llm-council) with production-ready features:
 
-| Feature | Original | LLM Council Plus |
+| Feature | Original | LLM-TTCC-TEAM-PRO |
 |---------|----------|------------------|
 | **Deployment** | Manual Python/npm setup | Docker Compose (one command) |
 | **Configuration** | Edit config.py manually | Visual Setup Wizard |

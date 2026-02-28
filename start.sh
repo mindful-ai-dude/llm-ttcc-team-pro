@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# LLM Council - Start script
+# LLM-TTCC-TEAM-PRO - Start script
 
-echo "Starting LLM Council..."
+echo "Starting LLM-TTCC-TEAM-PRO..."
 echo ""
 
 # Start backend
@@ -20,7 +20,7 @@ npm run dev &
 FRONTEND_PID=$!
 
 echo ""
-echo "✓ LLM Council is running!"
+echo "✓ LLM-TTCC-TEAM-PRO is running!"
 echo "  Backend:  http://localhost:8001"
 echo "  Frontend: http://localhost:5173"
 echo ""

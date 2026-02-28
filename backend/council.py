@@ -1,4 +1,4 @@
-"""3-stage LLM Council orchestration."""
+"""3-stage LLM-TTCC-TEAM-PRO council orchestration."""
 
 import re
 import json

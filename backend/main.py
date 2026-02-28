@@ -1,4 +1,4 @@
-"""FastAPI backend for LLM Council."""
+"""FastAPI backend for LLM-TTCC-TEAM-PRO."""
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,7 +56,7 @@ from .runtime_settings import (
     save_runtime_settings,
 )
 
-app = FastAPI(title="LLM Council API")
+app = FastAPI(title="LLM-TTCC-TEAM-PRO API")
 
 # Security scheme for protected endpoints
 security = HTTPBearer(auto_error=False)
@@ -209,7 +209,7 @@ class UpdateRuntimeSettingsRequest(BaseModel):
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "LLM Council API", "version": VERSION}
+    return {"status": "ok", "service": "LLM-TTCC-TEAM-PRO API", "version": VERSION}
 
 
 @app.get("/api/version")

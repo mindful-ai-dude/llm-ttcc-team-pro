@@ -3,11 +3,11 @@ import { api } from '../api';
 import './ModelSelector.css';
 
 // LocalStorage keys
-const LAST_USED_KEY = 'llm-council-last-selection';
-const LAST_CHAIRMAN_KEY = 'llm-council-last-chairman';
-const LAST_EXECUTION_MODE_KEY = 'llm-council-last-execution-mode';
-const LAST_ROUTER_TYPE_KEY = 'llm-council-last-router-type';
-const SAVED_PRESETS_KEY = 'llm-council-saved-presets-v1';
+const LAST_USED_KEY = 'llm-ttcc-team-pro-last-selection';
+const LAST_CHAIRMAN_KEY = 'llm-ttcc-team-pro-last-chairman';
+const LAST_EXECUTION_MODE_KEY = 'llm-ttcc-team-pro-last-execution-mode';
+const LAST_ROUTER_TYPE_KEY = 'llm-ttcc-team-pro-last-router-type';
+const SAVED_PRESETS_KEY = 'llm-ttcc-team-pro-saved-presets-v1';
 
 // Default max models (can be overridden by backend config)
 const DEFAULT_MAX_MODELS = 5;
