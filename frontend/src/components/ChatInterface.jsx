@@ -418,7 +418,7 @@ export default function ChatInterface({
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
-              accept=".pdf,.txt,.md,.jpg,.jpeg,.png,.gif,.webp"
+              accept=".pdf,.txt,.md,.mdx,.jpg,.jpeg,.png,.gif,.webp"
               multiple
               style={{ display: 'none' }}
             />
@@ -429,7 +429,7 @@ export default function ChatInterface({
               className="attach-button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || isUploading}
-              title="Attach file (PDF, TXT, MD, JPG, PNG, GIF, WebP)"
+              title="Attach file (PDF, TXT, MD, MDX, JPG, PNG, GIF, WebP)"
             >
               {isUploading ? (
                 <div className="spinner-small"></div>

@@ -848,7 +848,7 @@ async def upload_file(
     current_user: str = Depends(get_current_user)
 ):
     """
-    Upload and parse a file (PDF, TXT, MD, or images). Requires authentication.
+    Upload and parse a file (PDF, TXT, MD, MDX, or images). Requires authentication.
     Returns the parsed content that can be attached to a message.
     For images, returns base64 data URI.
     """
