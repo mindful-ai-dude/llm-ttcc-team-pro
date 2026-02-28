@@ -158,6 +158,9 @@ export const api = {
     if (options.username) {
       body.username = options.username;
     }
+    if (options.systemPrompt) {
+      body.system_prompt = options.systemPrompt;
+    }
 
     const response = await authFetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
@@ -478,6 +481,18 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/setup/status`);
     if (!response.ok) {
       throw new Error('Failed to get setup status');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get available system prompt presets (e.g., TTCC mode).
+   * @returns {Promise<{presets: Array<{id: string, name: string, prompt: string|null}>}>}
+   */
+  async getSystemPromptPresets() {
+    const response = await authFetch(`${API_BASE}/api/system-prompt-presets`);
+    if (!response.ok) {
+      throw new Error('Failed to get system prompt presets');
     }
     return response.json();
   },
