@@ -46,6 +46,15 @@ echo ""
 # --------------------------------------------------
 echo "[2/4] Installing backend dependencies (uv sync)..."
 uv sync
+# Try to install optional embeddings (chromadb + sentence-transformers + torch).
+# This fails on platforms where torch has no wheels (e.g. macOS Intel x86_64),
+# so we skip gracefully — the app works fine without local embeddings.
+if uv sync --extra embeddings 2>/dev/null; then
+    echo "  Embeddings support installed (chromadb + sentence-transformers)."
+else
+    echo "  NOTE: Skipping embeddings (torch not available on this platform)."
+    echo "        The app will work fine — local memory/embeddings are optional."
+fi
 echo ""
 
 # --------------------------------------------------
