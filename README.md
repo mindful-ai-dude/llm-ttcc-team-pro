@@ -94,11 +94,20 @@ This fork extends [Andrej Karpathy's llm-council](https://github.com/karpathy/ll
 
 **Easiest way — use the Setup Wizard:**
 ```bash
+# 1. Create your .env file (REQUIRED — backend will crash without it)
 cp .env.example .env
-docker compose up --build
-# Open http://localhost
-# The Setup Wizard will guide you through configuration
+
+# 2. Create the data directory for conversation storage
+mkdir -p data/conversations
+
+# 3. Build and start (first time — full rebuild recommended)
+docker compose build --no-cache && docker compose up -d
+
+# 4. Open http://localhost
+#    The Setup Wizard will guide you through configuration
 ```
+
+> **Important:** Steps 1 and 2 are required before the first run. Without the `.env` file and `data/` directory, the backend container will crash-loop.
 
 The Setup Wizard lets you:
 - Choose LLM provider (OpenRouter or Ollama)
@@ -109,8 +118,9 @@ The Setup Wizard lets you:
 **Alternative: Manual configuration**
 ```bash
 cp .env.example .env
-# Edit .env (see examples below)
-docker compose up --build
+mkdir -p data/conversations
+# Edit .env with your API keys (see examples below)
+docker compose up --build -d
 # Open http://localhost
 ```
 
@@ -185,9 +195,23 @@ docker compose logs backend
 docker compose logs -f backend
 ```
 
-**Troubleshooting: `ModuleNotFoundError` or import errors**
+**Troubleshooting**
 
-If the backend crashes with missing module errors (e.g., `No module named 'langchain'`), Docker's build cache is likely stale. Force a full rebuild:
+**Backend crash-looping** (`Restarting (1)` in `docker compose ps`):
+```bash
+# Check the error logs first
+docker compose logs backend --tail 50
+
+# Most common cause: missing .env file or data directory
+cp .env.example .env        # if .env doesn't exist
+mkdir -p data/conversations  # if data/ doesn't exist
+docker compose down
+docker compose up -d
+```
+
+**`ModuleNotFoundError` or import errors:**
+
+Docker's build cache is likely stale. Force a full rebuild:
 ```bash
 docker compose down
 docker compose build --no-cache
