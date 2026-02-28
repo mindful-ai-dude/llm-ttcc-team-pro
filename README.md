@@ -12,6 +12,30 @@ In a bit more detail, here is what happens when you submit a query:
 2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
 3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
 
+## Technical Training Course Creator (TTCC) Mode
+
+LLM Council Plus includes a built-in **Technical Training Course Creator** mode that transforms the council into an enterprise-grade course generation system. When TTCC mode is selected, a specialized system prompt is injected into all council models, turning them into expert instructional designers.
+
+### TTCC Features
+
+- **5-Phase Workflow**: Intake, Research, Architecture, Content Generation, QA
+- **Enterprise Deliverables**: Slide decks, hands-on labs, quizzes, and instructor guides
+- **Web Search Integration**: Auto-enables web search for current technical accuracy
+- **Multi-LLM Validation**: Council models cross-validate course content for accuracy
+- **Course Levels**: Beginner, Intermediate, and Advanced calibration
+- **Source Material Support**: Upload PDFs, markdown, or images as reference material
+
+### How to Use TTCC Mode
+
+1. Click **"New Conversation"** to open the Model Selector
+2. Select your council models (multimodal models recommended)
+3. Under **"System Prompt Mode"**, select **"Technical Training Course Creator (TTCC)"**
+4. Web search will auto-enable for content validation
+5. Start your conversation with a course request, e.g.:
+   > "Create an intermediate-level, 2-day course on Kubernetes on Azure AKS for DevOps engineers with 2+ years experience"
+
+The TTCC system prompt is defined in [`Technical_Training_Course_Creator_System_Prompt.md`](Technical_Training_Course_Creator_System_Prompt.md).
+
 ## What's Different from the Original
 
 This fork extends [Andrej Karpathy's llm-council](https://github.com/karpathy/llm-council) with production-ready features:
@@ -26,13 +50,24 @@ This fork extends [Andrej Karpathy's llm-council](https://github.com/karpathy/ll
 | **Storage** | JSON files only | JSON, PostgreSQL, MySQL |
 | **Token Optimization** | ❌ | ✅ TOON format (20-60% savings) |
 | **Web Search** | ❌ | ✅ DuckDuckGo + Tavily + Exa + Brave |
-| **File Attachments** | ❌ | ✅ PDF, TXT, MD, images |
+| **File Attachments** | ❌ | ✅ PDF, TXT, MD, MDX, images (drag-and-drop) |
+| **System Prompts** | ❌ | ✅ Per-conversation system prompts (General / TTCC / Custom) |
 | **Tools** | ❌ | ✅ Calculator, Wikipedia, ArXiv, Yahoo Finance |
 | **Real-time Streaming** | Basic | SSE with heartbeats & state persistence |
 | **Error Handling** | Silent failures | Toast notifications + visual indicators |
 | **Hot Reload** | ❌ | ✅ Config changes without restart |
 | **Conversation Search** | ❌ | ✅ Filter by title with relative dates |
 | **Stage Timeouts** | ❌ | ✅ 90s stage-level timeout (first-N-complete) |
+
+### Recent Updates (v1.4.0)
+
+| New Feature | What it adds | Where |
+|---|---|---|
+| **TTCC Mode** | Technical Training Course Creator system prompt with 5-phase course generation workflow | Model Selector → System Prompt Mode |
+| **System Prompt Presets** | Per-conversation system prompts: General, TTCC, or Custom | Model Selector → System Prompt Mode |
+| **Drag-and-Drop Upload** | Drop files directly onto the chat area with visual overlay feedback | Chat Interface |
+| **MDX File Support** | Upload `.mdx` files alongside PDF, TXT, MD, and images | File Upload |
+| **Auto Web Search** | TTCC mode auto-enables web search for content validation | Chat Interface |
 
 ### Recent Updates (v1.3.1)
 
@@ -165,7 +200,7 @@ OLLAMA_HOST=host.docker.internal:11434
 
 ## Web Search (Optional)
 
-The UI can run web search and inject results into Stage 1 as context. You can select the provider per message (search pill) or set a default in Settings.
+The UI can run web search and inject results into Stage 1 as context. You can select the provider per message (search pill) or set a default in Settings. In TTCC mode, web search is auto-enabled for content validation.
 
 Providers:
 - **DuckDuckGo (free)**: enabled by default, no API key required
