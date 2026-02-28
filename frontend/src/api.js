@@ -1,5 +1,5 @@
 /**
- * API client for the LLM Council backend.
+ * API client for the LLM-TTCC-TEAM-PRO backend.
  * Uses relative paths in production (nginx proxy) or localhost in development.
  */
 
@@ -11,7 +11,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || '';
  */
 function getAuthToken() {
   try {
-    const authData = localStorage.getItem('llm-council-auth');
+    const authData = localStorage.getItem('llm-ttcc-team-pro-auth');
     if (authData) {
       const parsed = JSON.parse(authData);
       if (parsed.state && parsed.state.token) {
@@ -48,7 +48,7 @@ function getAuthHeaders(additionalHeaders = {}) {
 function handleUnauthorized() {
   // Clear auth state in localStorage
   try {
-    localStorage.removeItem('llm-council-auth');
+    localStorage.removeItem('llm-ttcc-team-pro-auth');
   } catch (e) {
     console.error('Failed to clear auth state:', e);
   }

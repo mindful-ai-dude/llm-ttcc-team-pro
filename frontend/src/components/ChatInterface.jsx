@@ -299,7 +299,7 @@ export default function ChatInterface({
     return (
       <div className="chat-interface">
         <div className="empty-state">
-          <h2>Welcome to LLM Council Plus</h2>
+          <h2>Welcome to LLM-TTCC-TEAM-PRO</h2>
           <p>Create a new conversation to get started</p>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function ChatInterface({
         {conversation.messages.length === 0 ? (
           <div className="empty-state">
             <h2>Start a conversation</h2>
-            <p>Ask a question to consult the LLM Council Plus</p>
+            <p>Ask a question to consult LLM-TTCC-TEAM-PRO</p>
           </div>
         ) : (
           conversation.messages.map((msg, index) => (
@@ -346,7 +346,7 @@ export default function ChatInterface({
                 </div>
               ) : (
                 <div className="assistant-message">
-                  <div className="message-label">LLM Council Plus</div>
+                  <div className="message-label">LLM-TTCC-TEAM-PRO</div>
 
                   <SearchContext toolOutputs={msg.metadata?.tool_outputs || msg.tool_outputs} />
 
