@@ -18,7 +18,7 @@ dependencies = [
     # Auth
     "pyjwt>=2.11.0",
     "bcrypt>=5.0.0",
-    # Database (imported at startup by storage/database modules)
+    # Database
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
     "pymysql>=1.1.0",
@@ -35,21 +35,23 @@ dependencies = [
     # Google Drive integration
     "google-api-python-client>=2.189.0",
     "google-auth>=2.45.0",
-]
-
-[project.optional-dependencies]
-# Extra tools with heavy/platform-specific transitive deps (curl-cffi, psycopg2, etc.)
-# that may fail to build on some platforms. The core app works fine without them.
-tools = [
+    # Tools (LangChain + free tool integrations)
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.20",
     "wikipedia>=1.4.0",
     "arxiv>=2.0.0",
     "duckduckgo-search>=4.0.0",
+]
+
+[project.optional-dependencies]
+# Packages with native build deps that fail on some platforms (macOS Intel, etc.)
+# yfinance pulls in curl-cffi; sentence-transformers pulls in torch
+finance = [
     "yfinance>=0.2.0",
-    "langchain>=0.1.0",
-    "langchain-community>=0.0.20",
+]
+database = [
     "psycopg2-binary>=2.9.0",
 ]
-# Heavy ML deps (torch) - only install where supported (not macOS Intel x86_64)
 embeddings = [
     "chromadb>=0.4.0",
     "sentence-transformers>=2.2.0",

@@ -46,15 +46,13 @@ echo ""
 # --------------------------------------------------
 echo "[2/4] Installing backend dependencies (uv sync)..."
 uv sync
-echo "  Core dependencies installed."
+echo "  Dependencies installed (includes LangChain tools)."
 
-# Try optional extras that have platform-specific build requirements.
-# These may fail on some systems (e.g. macOS Intel) — the app works without them.
-if uv sync --extra tools 2>/dev/null; then
-    echo "  Tools installed (Wikipedia, ArXiv, Yahoo Finance, etc.)."
+# Try optional extras that have native build deps and may fail on some platforms.
+if uv sync --extra finance 2>/dev/null; then
+    echo "  Yahoo Finance (yfinance) installed."
 else
-    echo "  NOTE: Skipping optional tools (build failed on this platform)."
-    echo "        Wikipedia, ArXiv, Yahoo Finance tools will be unavailable."
+    echo "  NOTE: Skipping yfinance (curl-cffi build failed on this platform)."
 fi
 
 if uv sync --extra embeddings 2>/dev/null; then
